@@ -1,7 +1,7 @@
 #include <ESP8266WiFi.h>
 
 #define UART_BAUDRATE 9600
-#define FIXED_AGV_NUM 1
+//#define FIXED_AGV_NUM 1
 
 
 /* Variables para comunicación wifi*/
@@ -43,13 +43,10 @@ void setup() {
   Serial.setTimeout(10000);
   pinMode(5, OUTPUT); //Led para hacer pruebas
   WiFi.begin(ssid, password); //Conexión a la red
-  Serial.println("Connecting to Wifi");
   blockingWifiConnect();
-  Serial.println("Connected");
   lastMillis = millis();
   ESPState= IDLE;
   initRoutine();
-  Serial.println("Initialized");
 }
 
 void loop() {
@@ -68,9 +65,9 @@ void initRoutine(void)
   #ifndef FIXED_AGV_NUM
     while(!Serial.available()); //Espera que serial le pase el número de AGV
     size_t len=Serial.readBytesUntil('\n', uartBuffer, BUFSIZE);
-    uartBuffer[len]=0;
+    uartBuffer[len]='\n';
+    uartBuffer[len+1]=0;
     agvHeader= String((char *)uartBuffer);
-    Serial.print("String recieved: " + agvHeader);
   #endif
   String msg= agvHeader + "Online";
   client.connect(host, port);
@@ -122,6 +119,8 @@ void runStateMachine(void)
           if (recWifiMsg(wifiBuffer,&wifiBytesCount))
           {
               Serial.write((char *)wifiBuffer,wifiBytesCount);
+              Serial.flush();
+              Serial.write(0);//Terminador
               Serial.flush();
           }
           resetVariables();
