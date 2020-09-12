@@ -82,6 +82,7 @@ void blockingWifiConnect(void)
     digitalWrite(5, !digitalRead(5)); //Parpadea el led hasta que se conecta 
   }
   digitalWrite(5, 1);
+  Serial.write('c');
 }
 
 void runStateMachine(void)
