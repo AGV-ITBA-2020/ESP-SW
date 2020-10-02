@@ -1,3 +1,4 @@
+
 #include <ESP8266WiFi.h>
 
 #define UART_BAUDRATE 9600
@@ -7,11 +8,11 @@
 /* Variables para comunicación wifi*/
 #define HB_TIME 5000 //Delay de milisegundos entre señales de Heartbeat
 #define BUFSIZE 1024
-const char* ssid = "TeleCentro-2df3";
-const char* password = "QGNJDZYWEWMX";
+const char* ssid = "Flia BD Network";//"TeleCentro-2df3";
+const char* password = "muratureadrog";//"QGNJDZYWEWMX";
 WiFiClient client;
 const uint16_t port = 12345;
-const char * host = "192.168.0.102"; //192.168.98.1
+const char * host = "192.168.0.124"; //"192.168.0.102"
 String agvHeader= "AGV 1\n";
 
 
@@ -37,13 +38,19 @@ bool recWifiMsg(unsigned char * buf, unsigned int * msgLen);
 void resetVariables(void );
 void ignoreUART(void );
 void initRoutine(void);
+void printStatus(void);
 
 void setup() {
   Serial.begin(UART_BAUDRATE); //UART con la que se comunica con el filtro
-  Serial.setTimeout(10000);
+  Serial.setTimeout(60000);
+  while(!Serial.available());
+  byte incomingByte = Serial.read();
   pinMode(5, OUTPUT); //Led para hacer pruebas
+  //Serial.println("Conectando");
+  //listNetworks();
   WiFi.begin(ssid, password); //Conexión a la red
   blockingWifiConnect();
+  //Serial.println("Me conecté");
   lastMillis = millis();
   ESPState= IDLE;
   initRoutine();
@@ -76,10 +83,17 @@ void initRoutine(void)
 }
 void blockingWifiConnect(void)
 {
-  while(WiFi.status() != WL_CONNECTED)
+  int status = WiFi.status();
+  while(status != WL_CONNECTED)
   {
     delay(100);
+    status = WiFi.status();
+    //printStatus();
     digitalWrite(5, !digitalRead(5)); //Parpadea el led hasta que se conecta 
+    //Serial.println("Intento conectar de vuelta");
+    if(status == WL_CONNECT_FAILED)
+       WiFi.begin(ssid, password); //Conexión a la red de vuelta
+    
   }
   digitalWrite(5, 1);
   Serial.write('c');
@@ -101,7 +115,7 @@ void runStateMachine(void)
             ESPState=CONNECT_TO_SERVER;
           break;
         case CONNECT_TO_SERVER:
-          ignoreUART();
+          //ignoreUART();
           if (client.connect(host, port))
             ESPState=SEND_WIFI_MSG;
           break;
@@ -111,12 +125,12 @@ void runStateMachine(void)
             msg=agvHeader + "HB";
           else
             msg=agvHeader + String((char *)uartBuffer);
-          ignoreUART();
+          //ignoreUART();
           client.print(msg);
           ESPState=REC_WIFI_MSG;
           break;
         case REC_WIFI_MSG:
-          ignoreUART();
+          //ignoreUART();
           if (recWifiMsg(wifiBuffer,&wifiBytesCount))
           {
               Serial.write((char *)wifiBuffer,wifiBytesCount);
@@ -176,5 +190,46 @@ void ignoreUART(void )
      byte c = Serial.read();
      if (c == 0x00) //Cuando llega todo el mensaje le dice que está ocupado.
       Serial.write("Busy");
+  }
+}
+
+void printStatus() 
+{
+  int status=WiFi.status();
+  if (WiFi.status() == WL_CONNECTED)
+    Serial.println("Connected");
+  else if (WiFi.status() == WL_DISCONNECTED)
+    Serial.println("Disconnected");
+  else if (WiFi.status() == WL_CONNECT_FAILED)
+    Serial.println("connect failed");
+  else if (WiFi.status() == WL_CONNECTION_LOST)
+    Serial.println("Connection lost");
+  else if (WiFi.status() == WL_IDLE_STATUS)
+    Serial.println("Idle");
+}
+
+
+void listNetworks() {
+  // scan for nearby networks:
+  Serial.println("** Scan Networks **");
+  int numSsid = WiFi.scanNetworks();
+  if (numSsid == -1)
+  { 
+    Serial.println("Couldn't get a wifi connection");
+    while(true);
+  } 
+
+  // print the list of networks seen:
+  Serial.print("number of available networks:");
+  Serial.println(numSsid);
+
+  // print the network number and name for each network found:
+  for (int thisNet = 0; thisNet<numSsid; thisNet++) {
+    Serial.print(thisNet);
+    Serial.print(") ");
+    Serial.print(WiFi.SSID(thisNet));
+    Serial.print("\tSignal: ");
+    Serial.print(WiFi.RSSI(thisNet));
+    Serial.print(" dBm");
   }
 }
