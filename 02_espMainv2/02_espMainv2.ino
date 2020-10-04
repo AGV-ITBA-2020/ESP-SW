@@ -6,13 +6,13 @@
 
 
 /* Variables para comunicación wifi*/
-#define HB_TIME 5000 //Delay de milisegundos entre señales de Heartbeat
+#define HB_TIME 250 //Delay de milisegundos entre señales de Heartbeat
 #define BUFSIZE 1024
 const char* ssid = "Flia BD Network";//"TeleCentro-2df3";
 const char* password = "muratureadrog";//"QGNJDZYWEWMX";
 WiFiClient client;
 const uint16_t port = 12345;
-const char * host = "192.168.0.124"; //"192.168.0.102"
+const char * host = "192.168.1.51"; //"192.168.0.102"
 String agvHeader= "AGV 1\n";
 
 
