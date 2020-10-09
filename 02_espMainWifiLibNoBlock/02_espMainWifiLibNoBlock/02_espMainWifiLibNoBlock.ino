@@ -1,5 +1,12 @@
 
 #include <ESP8266WiFi.h>
+#include "ArduinoQueue.h"
+
+#define REC_QUEUE_MAX_SIZE 10
+
+// Queue creation:
+ArduinoQueue<String> recQueue(REC_QUEUE_MAX_SIZE);
+
 
 #define UART_BAUDRATE 9600
 //#define FIXED_AGV_NUM 1
@@ -7,7 +14,7 @@
 
 /* Variables para comunicación wifi*/
 #define HB_TIME 250 //Delay de milisegundos entre señales de Heartbeat
-#define BUFSIZE 1024
+#define BUFSIZE 1500
 const char* ssid = "Flia BD Network";//"TeleCentro-2df3";
 const char* password = "muratureadrog";//"QGNJDZYWEWMX";
 WiFiClient client;
@@ -20,53 +27,61 @@ String agvHeader= "AGV 1\n";
 /*Variables de la máquina*/
 enum ESPStates{
   IDLE,
-  REC_CIAA_MSG,
   CONNECT_TO_SERVER,
   SEND_WIFI_MSG,
-  REC_WIFI_MSG
+  REC_WIFI_MSG,
+  SEND_WIFI_MSG_UART
 };
 byte uartBuffer[BUFSIZE],wifiBuffer[BUFSIZE];
 unsigned int uartBytesCount=0;
 unsigned int wifiBytesCount=0;
+unsigned int wifiBytesSent=0;
 enum ESPStates ESPState;
 long lastMillis=0;
 
-void runStateMachine(void);
+void handshake(void);
 void blockingWifiConnect(void);
-bool recSerialMsg(unsigned char * buf, unsigned int * msgLen);
+void recUARTMsgs(unsigned char * buf, unsigned int * msgLen);
+void runStateMachine(void);
 bool recWifiMsg(unsigned char * buf, unsigned int * msgLen);
 void resetVariables(void );
-void ignoreUART(void );
 void initRoutine(void);
 void printStatus(void);
 
 void setup() {
   Serial.begin(UART_BAUDRATE); //UART con la que se comunica con el filtro
   Serial.setTimeout(60000);
-  while(!Serial.available());
-  byte incomingByte = Serial.read();
+  
   pinMode(5, OUTPUT); //Led para hacer pruebas
   //Serial.println("Conectando");
-  //listNetworks();
-  WiFi.begin(ssid, password); //Conexión a la red
-  blockingWifiConnect();
+  handshake();
   //Serial.println("Me conecté");
-  lastMillis = millis();
-  ESPState= IDLE;
-  initRoutine();
+  
 }
 
 void loop() {
   
   while(WiFi.status() == WL_CONNECTED)
+  {
+      recUARTMsgs(uartBuffer, &uartBytesCount);
       runStateMachine();
+  }
   Serial.write("Disconnected");
   blockingWifiConnect();
-  resetVariables();
-
   
 }
-
+void handshake(void)
+{
+  while(!Serial.available());
+  byte incomingByte = Serial.read();
+  blockingWifiConnect();
+  resetVariables();
+  WiFi.begin(ssid, password); //Conexión a la red
+  blockingWifiConnect();
+  lastMillis = millis();
+  ESPState= IDLE;
+  initRoutine();
+}
 void initRoutine(void)
 {
   #ifndef FIXED_AGV_NUM
@@ -101,65 +116,69 @@ void blockingWifiConnect(void)
 
 void runStateMachine(void)
 {
-  String msg;
+  String msg,aux;
+  int sentCount;
   switch(ESPState)
       {
         case IDLE:
-          if (Serial.available() > 0 )
-            ESPState=REC_CIAA_MSG;
-          else if (millis() - lastMillis > HB_TIME)
-            ESPState=CONNECT_TO_SERVER;
-          break;
-        case REC_CIAA_MSG:
-          if (recSerialMsg(uartBuffer,&uartBytesCount))
+          if ((millis() - lastMillis > HB_TIME) || !recQueue.isEmpty())
             ESPState=CONNECT_TO_SERVER;
           break;
         case CONNECT_TO_SERVER:
-          //ignoreUART();
           if (client.connect(host, port))
             ESPState=SEND_WIFI_MSG;
           break;
         case SEND_WIFI_MSG:
-          //String msg = uartBytesCount==0 ? String(agvHeader + "HB") : String(agvHeader + String(uartBuffer)); //Elige que mensaje enviar
-          if (uartBytesCount==0)
+          if (recQueue.isEmpty())
             msg=agvHeader + "HB";
           else
-            msg=agvHeader + String((char *)uartBuffer);
-          //ignoreUART();
-          client.print(msg);
-          ESPState=REC_WIFI_MSG;
+          {
+            aux=recQueue.dequeue();
+            if(aux=="Reset")
+              handshake();
+            else
+            {
+              msg=agvHeader + aux;
+              client.print(msg);
+              ESPState=REC_WIFI_MSG;
+            }
+          }
+            
           break;
         case REC_WIFI_MSG:
           //ignoreUART();
-          if (recWifiMsg(wifiBuffer,&wifiBytesCount))
+          recWifiMsg(wifiBuffer,&wifiBytesCount);
+          ESPState=SEND_WIFI_MSG_UART;
+          break;
+        case SEND_WIFI_MSG_UART:
+          if(wifiBytesSent<wifiBytesCount)
           {
-              Serial.write((char *)wifiBuffer,wifiBytesCount);
-              Serial.flush();
-              Serial.write(0);//Terminador
-              Serial.flush();
+            sentCount = Serial.write((char *)(wifiBuffer+wifiBytesSent),wifiBytesCount-wifiBytesSent);
+            wifiBytesSent += sentCount;
+          }
+          else
+          {  
+            while(!Serial.availableForWrite());
+            Serial.write(0);
+            //Serial.flush();
           }
           resetVariables();
           break;
       }
 }
-bool recSerialMsg(unsigned char * buf, unsigned int * msgLen)
+void recUARTMsgs(unsigned char * buf, unsigned int * msgLen)
 {
-  bool finished=false;
-  if (Serial.available() > 0 ) 
+  while(Serial.available() > 0 ) 
   { 
     byte c = Serial.read();
     buf[*msgLen]=c;
     (*msgLen)++;
     if (c == 0x00)
-       finished=1;
-    /*
-    if (c == '\n')
     {
-      buf[*msgLen]=0;
-      finished=1;
-    }*/
+      recQueue.enqueue(String((char *)uartBuffer));
+      *msgLen=0;
+    }
   }
-  return finished;
 }
 bool recWifiMsg(unsigned char * buf, unsigned int * msgLen)
 {
@@ -181,18 +200,8 @@ void resetVariables(void )
   ESPState=IDLE;
   lastMillis = millis();
   wifiBytesCount = 0;
-  uartBytesCount = 0;
+  wifiBytesSent = 0;
 }
-void ignoreUART(void )
-{
-  if (Serial.available() > 0 ) //Si llegan cosas de uart las va leyendo
-  { 
-     byte c = Serial.read();
-     if (c == 0x00) //Cuando llega todo el mensaje le dice que está ocupado.
-      Serial.write("Busy");
-  }
-}
-
 void printStatus() 
 {
   int status=WiFi.status();
