@@ -51,9 +51,13 @@ void printStatus(void);
 void setup() {
   Serial.begin(UART_BAUDRATE); //UART con la que se comunica con el filtro
   Serial.setTimeout(60000);
+  byte incomingByte;
   
   pinMode(5, OUTPUT); //Led para hacer pruebas
   //Serial.println("Conectando");
+  while(Serial.available()<6);//Espera que Llegue "Reset\0"
+  while(Serial.available())
+     incomingByte = Serial.read();
   handshake();
   //Serial.println("Me conecté");
   
@@ -72,8 +76,6 @@ void loop() {
 }
 void handshake(void)
 {
-  while(!Serial.available());
-  byte incomingByte = Serial.read();
   blockingWifiConnect();
   resetVariables();
   WiFi.begin(ssid, password); //Conexión a la red
