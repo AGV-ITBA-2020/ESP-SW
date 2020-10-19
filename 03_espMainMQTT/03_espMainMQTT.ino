@@ -36,6 +36,8 @@ void HBLogic(void);
 /********************Setup y loop**************************/
 void setup() {
   pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
+  pinMode(D1, INPUT);
+  pinMode(D2, INPUT);
   Serial.begin(115200);
   digitalWrite(BUILTIN_LED, HIGH); //Usamos el LED para indicar que se conectó a internet
   Serial.setTimeout(60000);
