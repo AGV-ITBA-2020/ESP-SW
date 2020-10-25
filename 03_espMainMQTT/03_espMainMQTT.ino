@@ -17,9 +17,9 @@ unsigned int fromCIAABytesCount=0,toCIAABytesCount=0; //Counts para arrays auxil
 long lastMillis=0;
 bool sendingToCIAA=0;
 /********************Datos de conexión de internet**************************/
-const char* ssid = "TeleCentro-a01d";        // Poner aquí la SSID de la WiFi
-const char* password = "ZWMXGZM2JZ2D";  // Poner aquí el passwd de la WiFi
-const char* mqtt_server = "192.168.0.52";
+const char* ssid = "Flia BD Network";        // Poner aquí la SSID de la WiFi
+const char* password = "muratureadrog";  // Poner aquí el passwd de la WiFi
+const char* mqtt_server = "192.168.1.51";
 WiFiClient espClient;
 PubSubClient client(espClient);
 
@@ -36,14 +36,22 @@ void HBLogic(void);
 /********************Setup y loop**************************/
 void setup() {
   pinMode(BUILTIN_LED, OUTPUT);     // Initialize the BUILTIN_LED pin as an output
-  pinMode(D1, INPUT);
+  pinMode(D1, OUTPUT);
   pinMode(D2, INPUT);
   Serial.begin(115200);
+  digitalWrite(D1, LOW);
   digitalWrite(BUILTIN_LED, HIGH); //Usamos el LED para indicar que se conectó a internet
   Serial.setTimeout(60000);
   setup_wifi();
   client.setServer(mqtt_server, 1883); //Conección al mqtt server
   client.setCallback(callback); 
+  String firstMsg;
+  do{
+  size_t len=Serial.readBytesUntil(TERMINATOR, fromCIAABuffer, HEADER_MAX_SIZE); // 00 para la ciaa, \t para debuggear con el serial de arduino
+  fromCIAABuffer[len]=0;
+  firstMsg = String((char *)fromCIAABuffer);
+  } while(firstMsg == "Reset");
+  digitalWrite(D1, HIGH);
   handshake();  //Handshake en el que la CIAA le dice el nro de AGV que es
   lastMillis = millis();
 }
@@ -96,7 +104,7 @@ void handshake(void)
   size_t len=Serial.readBytesUntil(TERMINATOR, headerArray, HEADER_MAX_SIZE); // 00 para la ciaa, \t para debuggear con el serial de arduino
   headerArray[len]=0;
   agvHeader = String((char *)headerArray); // Garda en el string global el header que le mandó la CIAA
-  Serial.println("Llegué al header: " + agvHeader);
+  //Serial.println("Llegué al header: " + agvHeader);
   String clientId = "ESP8266Client-"; // Create a random client ID
   clientId += String(random(0xffff), HEX);
   client.connect(clientId.c_str());
