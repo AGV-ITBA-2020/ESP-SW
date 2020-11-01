@@ -50,7 +50,7 @@ void setup() {
   size_t len=Serial.readBytesUntil(TERMINATOR, fromCIAABuffer, HEADER_MAX_SIZE); // 00 para la ciaa, \t para debuggear con el serial de arduino
   fromCIAABuffer[len]=0;
   firstMsg = String((char *)fromCIAABuffer);
-  } while(firstMsg == "Reset");
+  } while(firstMsg != "Reset");
   digitalWrite(D1, HIGH);
   handshake();  //Handshake en el que la CIAA le dice el nro de AGV que es
   lastMillis = millis();
